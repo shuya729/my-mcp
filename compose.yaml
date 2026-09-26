@@ -1,0 +1,45 @@
+name: my-mcp
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      APP_DB: ${APP_DB:-app}
+      LOGTO_DB: ${LOGTO_DB:-logto}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  logto:
+    image: svhd/logto:1.43.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint:
+      [
+        "sh",
+        "-c",
+        "ln -sfn ../../connectors/connector-mock-email packages/core/connectors/@logto-connector-mock-email && npm run cli db seed -- --swe && npm start",
+      ]
+    environment:
+      TRUST_PROXY_HEADER:
+      DB_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${LOGTO_DB:-logto}
+      PRIVATE_KEY_ROTATION_GRACE_PERIOD:
+      SSRF_ALLOWED_ADDRESSES:
+      SSRF_PROTECTION_DISABLED:
+      OIDC_PROVIDER_SSRF_PROTECTION_DISABLED:
+      ENDPOINT: ${LOGTO_URL}
+      ADMIN_ENDPOINT: ${LOGTO_ADMIN_URL}
+    ports:
+      - "3001:3001"
+      - "3002:3002"
+
+volumes:
+  postgres-data:

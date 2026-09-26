@@ -1,0 +1,66 @@
+resources:
+  api:
+    name: api
+    indicator: ${API_URL}
+    scopes:
+      - name: user:read
+        description: Read the signed-in user's data.
+  mcp:
+    name: mcp
+    indicator: ${MCP_URL}
+    scopes:
+      - name: user:read
+        description: Read the signed-in user's data through MCP.
+
+roles:
+  name: user
+  description: Allows a signed-in user to read their own data through the API and MCP server.
+  type: User
+  isDefault: true
+  scopes:
+    - api/user:read
+    - mcp/user:read
+
+cimd:
+  enabled: true
+  resourceScopes:
+    - mcp/user:read
+
+signInExperience:
+  signInMode: SignInAndRegister
+  signUp:
+    identifiers: [email]
+    password: false
+    verify: true
+  signIn:
+    methods:
+      - identifier: email
+        password: false
+        verificationCode: true
+        isPasswordPrimary: false
+  passkeySignIn:
+    enabled: true
+    showPasskeyButton: false
+    allowAutofill: true
+
+# 開発環境用の mock email connector の設定
+mockEmail:
+  connectorId: mock-email-service
+  type: Email
+  config:
+    apiKey: local-mock-only
+    fromEmail: local@example.com
+    fromName: Local App
+    templates:
+      - usageType: SignIn
+        type: text/plain
+        subject: Local sign-in code
+        content: "Your sign-in code is {{code}}."
+      - usageType: Register
+        type: text/plain
+        subject: Local registration code
+        content: "Your registration code is {{code}}."
+      - usageType: Generic
+        type: text/plain
+        subject: Local verification code
+        content: "Your verification code is {{code}}."
