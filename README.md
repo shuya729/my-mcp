@@ -32,6 +32,7 @@ docker compose exec logto cat /tmp/logto/mock_email_record.txt
 - `make down` — コンテナを停止
 - `make logs` — コンテナのログを表示
 - `make run` — サーバーを起動
+- `make format` — Go コードを整形
 - `make test` — テストを実行
-- `make check` — `go vet` とテストを実行
+- `make check` — `go vet` を実行
 - `make build` — `bin/mcp` をビルド

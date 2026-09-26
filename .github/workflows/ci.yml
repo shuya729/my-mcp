@@ -17,3 +17,5 @@ jobs:
           go-version-file: go.mod
       - name: Check
         run: make check
+      - name: Test
+        run: make test

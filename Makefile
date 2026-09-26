@@ -1,4 +1,4 @@
-.PHONY: help up down logs run test check build
+.PHONY: help up down logs run format test check build
 
 .DEFAULT_GOAL := help
 
@@ -9,8 +9,9 @@ help:
 	@echo "  make down   Stop PostgreSQL and Logto"
 	@echo "  make logs   Follow PostgreSQL and Logto logs"
 	@echo "  make run    Run the MCP server using .env"
+	@echo "  make format Format Go code"
 	@echo "  make test   Run Go tests"
-	@echo "  make check  Run go vet and Go tests"
+	@echo "  make check  Run go vet"
 	@echo "  make build  Build bin/mcp"
 
 up:
@@ -25,12 +26,14 @@ logs:
 run:
 	@set -a; . ./.env; set +a; go run ./cmd/mcp
 
+format:
+	go fmt ./...
+
 test:
 	go test ./...
 
 check:
 	go vet ./...
-	go test ./...
 
 build:
 	@mkdir -p bin
