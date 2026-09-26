@@ -5,21 +5,23 @@ import (
 	"testing"
 )
 
-func TestLoad(t *testing.T) {
+func TestLoadMCP(t *testing.T) {
 	tests := []struct {
-		name     string
-		mcpURL   string
-		logtoURL string
-		want     Config
-		wantErr  bool
+		name      string
+		mcpURL    string
+		logtoURL  string
+		missingDB string
+		want      MCPConfig
+		wantErr   bool
 	}{
 		{
 			name:     "valid URLs",
 			mcpURL:   "https://mcp.example.com",
 			logtoURL: "https://logto.example.com",
-			want: Config{
-				MCPURL:   "https://mcp.example.com",
-				LogtoURL: "https://logto.example.com",
+			want: MCPConfig{
+				MCPURL:      "https://mcp.example.com",
+				LogtoURL:    "https://logto.example.com",
+				DatabaseURL: "postgres://dbuser:p%40ss%3Aword@127.0.0.1:5432/app?sslmode=disable",
 			},
 		},
 		{
@@ -56,19 +58,32 @@ func TestLoad(t *testing.T) {
 			logtoURL: "https://logto.example.com/%ZZ",
 			wantErr:  true,
 		},
+		{
+			name:      "missing APP_DB",
+			mcpURL:    "https://mcp.example.com",
+			logtoURL:  "https://logto.example.com",
+			missingDB: "APP_DB",
+			wantErr:   true,
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			t.Setenv("MCP_URL", test.mcpURL)
 			t.Setenv("LOGTO_URL", test.logtoURL)
+			t.Setenv("POSTGRES_USER", "dbuser")
+			t.Setenv("POSTGRES_PASSWORD", "p@ss:word")
+			t.Setenv("APP_DB", "app")
+			if test.missingDB != "" {
+				t.Setenv(test.missingDB, "")
+			}
 
-			configuration, err := Load()
+			configuration, err := LoadMCP()
 			if (err != nil) != test.wantErr {
-				t.Errorf("Load() error = %v, wantErr %v", err, test.wantErr)
+				t.Errorf("LoadMCP() error = %v, wantErr %v", err, test.wantErr)
 			}
 			if !reflect.DeepEqual(configuration, test.want) {
-				t.Errorf("Load() = %v, want %v", configuration, test.want)
+				t.Errorf("LoadMCP() = %v, want %v", configuration, test.want)
 			}
 		})
 	}

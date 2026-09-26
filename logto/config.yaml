@@ -5,26 +5,33 @@ resources:
     scopes:
       - name: user:read
         description: Read the signed-in user's data.
+      - name: user:write
+        description: Create, update, and delete the signed-in user's data.
   mcp:
     name: mcp
     indicator: ${MCP_URL}
     scopes:
       - name: user:read
         description: Read the signed-in user's data through MCP.
+      - name: user:write
+        description: Create, update, and delete the signed-in user's data through MCP.
 
 roles:
   name: user
-  description: Allows a signed-in user to read their own data through the API and MCP server.
+  description: Allows a signed-in user to manage their own data through the API and MCP.
   type: User
   isDefault: true
   scopes:
     - api/user:read
+    - api/user:write
     - mcp/user:read
+    - mcp/user:write
 
 cimd:
   enabled: true
   resourceScopes:
     - mcp/user:read
+    - mcp/user:write
 
 signInExperience:
   signInMode: SignInAndRegister

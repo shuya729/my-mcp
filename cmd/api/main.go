@@ -12,9 +12,9 @@ import (
 	"syscall"
 	"time"
 
+	"my-mcp/internal/apiserver"
 	"my-mcp/internal/authn"
 	"my-mcp/internal/config"
-	"my-mcp/internal/mcpserver"
 	"my-mcp/internal/repository"
 	"my-mcp/internal/usecase"
 
@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	listenAddress     = ":8081"
+	listenAddress     = ":8080"
 	readHeaderTimeout = 15 * time.Second
 	readTimeout       = 2 * time.Minute
 	idleTimeout       = 2 * time.Minute
@@ -31,17 +31,16 @@ const (
 
 func main() {
 	if err := run(); err != nil {
-		slog.Error("MCP server stopped", "error", err)
+		slog.Error("API server stopped", "error", err)
 		os.Exit(1)
 	}
 }
 
 func run() error {
-	configuration, err := config.LoadMCP()
+	configuration, err := config.LoadAPI()
 	if err != nil {
 		return err
 	}
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
@@ -49,8 +48,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("build issuer URL: %w", err)
 	}
-
-	verifier, err := authn.NewVerifier(ctx, issuer, configuration.MCPURL)
+	verifier, err := authn.NewVerifier(ctx, issuer, configuration.APIURL)
 	if err != nil {
 		return fmt.Errorf("initialize token verifier: %w", err)
 	}
@@ -70,11 +68,10 @@ func run() error {
 	}
 
 	users := usecase.NewUsers(repository.NewUserRepository(pool))
-	handler, err := mcpserver.New(configuration.MCPURL, issuer, verifier.Verify, users)
+	handler, err := apiserver.New(configuration.APIURL, issuer, verifier.Verify, users)
 	if err != nil {
-		return fmt.Errorf("initialize MCP handler: %w", err)
+		return fmt.Errorf("initialize API handler: %w", err)
 	}
-
 	server := &http.Server{
 		Addr:              listenAddress,
 		Handler:           handler,
@@ -82,10 +79,9 @@ func run() error {
 		ReadTimeout:       readTimeout,
 		IdleTimeout:       idleTimeout,
 	}
-
 	serveErrors := make(chan error, 1)
 	go func() {
-		slog.Info("MCP server starting", "address", listenAddress, "resource", configuration.MCPURL)
+		slog.Info("API server starting", "address", listenAddress, "resource", configuration.APIURL)
 		serveErrors <- server.ListenAndServe()
 	}()
 
@@ -94,7 +90,7 @@ func run() error {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
-			return fmt.Errorf("shut down MCP server: %w", err)
+			return fmt.Errorf("shut down API server: %w", err)
 		}
 	case err := <-serveErrors:
 		if !errors.Is(err, http.ErrServerClosed) {
