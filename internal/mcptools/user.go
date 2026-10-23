@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"slices"
 
 	"my-mcp/internal/domain"
 	"my-mcp/internal/usecase"
@@ -38,7 +37,7 @@ type UserOutput struct {
 }
 
 func (t UserTools) GetUser(ctx context.Context, request *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, UserOutput, error) {
-	authID, err := subjectFor(request, ReadScope)
+	authID, err := subjectFor(request)
 	if err != nil {
 		return nil, UserOutput{}, err
 	}
@@ -50,7 +49,7 @@ func (t UserTools) GetUser(ctx context.Context, request *mcp.CallToolRequest, _ 
 }
 
 func (t UserTools) CreateUser(ctx context.Context, request *mcp.CallToolRequest, input NameInput) (*mcp.CallToolResult, UserOutput, error) {
-	authID, err := subjectFor(request, WriteScope)
+	authID, err := subjectFor(request)
 	if err != nil {
 		return nil, UserOutput{}, err
 	}
@@ -62,7 +61,7 @@ func (t UserTools) CreateUser(ctx context.Context, request *mcp.CallToolRequest,
 }
 
 func (t UserTools) UpdateUser(ctx context.Context, request *mcp.CallToolRequest, input NameInput) (*mcp.CallToolResult, UserOutput, error) {
-	authID, err := subjectFor(request, WriteScope)
+	authID, err := subjectFor(request)
 	if err != nil {
 		return nil, UserOutput{}, err
 	}
@@ -74,7 +73,7 @@ func (t UserTools) UpdateUser(ctx context.Context, request *mcp.CallToolRequest,
 }
 
 func (t UserTools) DeleteUser(ctx context.Context, request *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, struct{}, error) {
-	authID, err := subjectFor(request, WriteScope)
+	authID, err := subjectFor(request)
 	if err != nil {
 		return nil, struct{}{}, err
 	}
@@ -84,12 +83,9 @@ func (t UserTools) DeleteUser(ctx context.Context, request *mcp.CallToolRequest,
 	return nil, struct{}{}, nil
 }
 
-func subjectFor(request *mcp.CallToolRequest, scope string) (string, error) {
+func subjectFor(request *mcp.CallToolRequest) (string, error) {
 	if request == nil || request.Extra == nil || request.Extra.TokenInfo == nil || request.Extra.TokenInfo.UserID == "" {
 		return "", errors.New("authenticated identity is unavailable")
-	}
-	if !slices.Contains(request.Extra.TokenInfo.Scopes, scope) {
-		return "", errors.New("required scope: " + scope)
 	}
 	return request.Extra.TokenInfo.UserID, nil
 }

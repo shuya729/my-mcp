@@ -47,13 +47,13 @@ func TestNew(t *testing.T) {
 
 func TestUserToolsAreRegistered(t *testing.T) {
 	verifier := func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
-		return &auth.TokenInfo{UserID: "sub", Expiration: time.Now().Add(time.Hour)}, nil
+		return &auth.TokenInfo{UserID: "sub", Scopes: []string{mcptools.ReadScope, mcptools.WriteScope}, Expiration: time.Now().Add(time.Hour)}, nil
 	}
 	handler, err := New("https://mcp.example.com", "https://issuer.example.com", verifier, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	request := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
+	request := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`))
 	request.Header.Set("Authorization", "Bearer test-token")
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Accept", "application/json, text/event-stream")
@@ -120,31 +120,27 @@ func TestToolCallsUseAuthenticatedIdentity(t *testing.T) {
 		name          string
 		tool          string
 		arguments     string
-		scope         string
 		wantOperation string
 		wantName      string
 		wantOutput    map[string]any
-		wantToolError bool
 	}{
-		{name: "get with read scope", tool: "get_user", arguments: `{}`, scope: mcptools.ReadScope, wantOperation: "get", wantOutput: map[string]any{"id": "user-id", "name": "Alice"}},
-		{name: "create with write scope", tool: "create_user", arguments: `{"name":"Bob"}`, scope: mcptools.WriteScope, wantOperation: "create", wantName: "Bob", wantOutput: map[string]any{"id": "user-id", "name": "Bob"}},
-		{name: "update with write scope", tool: "update_user", arguments: `{"name":"Carol"}`, scope: mcptools.WriteScope, wantOperation: "update", wantName: "Carol", wantOutput: map[string]any{"id": "user-id", "name": "Carol"}},
-		{name: "delete with write scope", tool: "delete_user", arguments: `{}`, scope: mcptools.WriteScope, wantOperation: "delete", wantOutput: map[string]any{}},
-		{name: "get rejects write-only scope", tool: "get_user", arguments: `{}`, scope: mcptools.WriteScope, wantToolError: true},
-		{name: "create rejects read-only scope", tool: "create_user", arguments: `{"name":"Bob"}`, scope: mcptools.ReadScope, wantToolError: true},
+		{name: "get", tool: "get_user", arguments: `{}`, wantOperation: "get", wantOutput: map[string]any{"id": "user-id", "name": "Alice"}},
+		{name: "create", tool: "create_user", arguments: `{"name":"Bob"}`, wantOperation: "create", wantName: "Bob", wantOutput: map[string]any{"id": "user-id", "name": "Bob"}},
+		{name: "update", tool: "update_user", arguments: `{"name":"Carol"}`, wantOperation: "update", wantName: "Carol", wantOutput: map[string]any{"id": "user-id", "name": "Carol"}},
+		{name: "delete", tool: "delete_user", arguments: `{}`, wantOperation: "delete", wantOutput: map[string]any{}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			users := &recordingUserService{}
 			verifier := func(context.Context, string, *http.Request) (*auth.TokenInfo, error) {
-				return &auth.TokenInfo{UserID: "logto-sub", Scopes: []string{tt.scope}, Expiration: time.Now().Add(time.Hour)}, nil
+				return &auth.TokenInfo{UserID: "logto-sub", Scopes: []string{mcptools.ReadScope, mcptools.WriteScope}, Expiration: time.Now().Add(time.Hour)}, nil
 			}
 			handler, err := New("https://mcp.example.com", "https://issuer.example.com", verifier, users)
 			if err != nil {
 				t.Fatal(err)
 			}
 			body := `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"` + tt.tool + `","arguments":` + tt.arguments + `}}`
-			request := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+			request := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(body))
 			request.Header.Set("Authorization", "Bearer test-token")
 			request.Header.Set("Content-Type", "application/json")
 			request.Header.Set("Accept", "application/json, text/event-stream")
@@ -163,8 +159,8 @@ func TestToolCallsUseAuthenticatedIdentity(t *testing.T) {
 			if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
 				t.Fatal(err)
 			}
-			if len(result.Error) != 0 || result.Result.IsError != tt.wantToolError {
-				t.Errorf("tool error = %v, protocol error present = %v, wantToolError %v", result.Result.IsError, len(result.Error) != 0, tt.wantToolError)
+			if len(result.Error) != 0 || result.Result.IsError {
+				t.Errorf("tool error = %v, protocol error present = %v", result.Result.IsError, len(result.Error) != 0)
 			}
 			if users.operation != tt.wantOperation || users.name != tt.wantName {
 				t.Errorf("service call = %q (%q), want %q (%q)", users.operation, users.name, tt.wantOperation, tt.wantName)
@@ -172,7 +168,7 @@ func TestToolCallsUseAuthenticatedIdentity(t *testing.T) {
 			if tt.wantOperation != "" && users.authID != "logto-sub" {
 				t.Errorf("service authID = %q", users.authID)
 			}
-			if !tt.wantToolError && !reflect.DeepEqual(result.Result.StructuredContent, tt.wantOutput) {
+			if !reflect.DeepEqual(result.Result.StructuredContent, tt.wantOutput) {
 				t.Errorf("structured content = %+v, want %+v", result.Result.StructuredContent, tt.wantOutput)
 			}
 		})
@@ -212,14 +208,14 @@ func TestNewHTTP(t *testing.T) {
 		{
 			name:          "POST without bearer token",
 			method:        http.MethodPost,
-			path:          "/",
+			path:          "/mcp",
 			wantStatus:    http.StatusUnauthorized,
 			wantChallenge: true,
 		},
 		{
 			name:               "invalid bearer token",
 			method:             http.MethodPost,
-			path:               "/",
+			path:               "/mcp",
 			authorization:      "Bearer test-token",
 			verifierErr:        auth.ErrInvalidToken,
 			wantStatus:         http.StatusUnauthorized,
@@ -227,9 +223,9 @@ func TestNewHTTP(t *testing.T) {
 			wantVerifierCalled: true,
 		},
 		{
-			name:       "root rejects GET",
+			name:       "MCP endpoint rejects GET",
 			method:     http.MethodGet,
-			path:       "/",
+			path:       "/mcp",
 			wantStatus: http.StatusMethodNotAllowed,
 		},
 		{
@@ -267,6 +263,8 @@ func TestNewHTTP(t *testing.T) {
 			}
 			if got := response.Header().Get("WWW-Authenticate"); (got != "") != test.wantChallenge {
 				t.Errorf("WWW-Authenticate present = %v, want %v", got != "", test.wantChallenge)
+			} else if test.wantChallenge && !strings.Contains(got, `scope="user:read user:write"`) {
+				t.Errorf("WWW-Authenticate scope = %q", got)
 			}
 			if verifierCalled != test.wantVerifierCalled {
 				t.Errorf("verifier called = %v, want %v", verifierCalled, test.wantVerifierCalled)

@@ -34,19 +34,19 @@ func New(resource, issuer string, verifier auth.TokenVerifier, users mcptools.Us
 	userTools := mcptools.UserTools{Users: users}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "get_user",
-		Description: "Get the authenticated user's ID and name. Requires user:read.",
+		Description: "Get the authenticated user's ID and name.",
 	}, userTools.GetUser)
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "create_user",
-		Description: "Create the authenticated user with a name. Requires user:write.",
+		Description: "Create the authenticated user with a name.",
 	}, userTools.CreateUser)
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "update_user",
-		Description: "Update the authenticated user's name. Requires user:write.",
+		Description: "Update the authenticated user's name.",
 	}, userTools.UpdateUser)
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "delete_user",
-		Description: "Delete the authenticated user. Requires user:write.",
+		Description: "Delete the authenticated user.",
 	}, userTools.DeleteUser)
 
 	streamableHandler := mcp.NewStreamableHTTPHandler(
@@ -58,6 +58,7 @@ func New(resource, issuer string, verifier auth.TokenVerifier, users mcptools.Us
 	)
 	authenticatedHandler := auth.RequireBearerToken(verifier, &auth.RequireBearerTokenOptions{
 		ResourceMetadataURL: metadataURL.String(),
+		Scopes:              []string{mcptools.ReadScope, mcptools.WriteScope},
 		ClockSkew:           clockSkew,
 	})(streamableHandler)
 
@@ -69,7 +70,7 @@ func New(resource, issuer string, verifier auth.TokenVerifier, users mcptools.Us
 		BearerMethodsSupported: []string{"header"},
 		ResourceName:           "my-mcp",
 	}))
-	r.Method(http.MethodPost, "/", authenticatedHandler)
+	r.Method(http.MethodPost, "/mcp", authenticatedHandler)
 
 	return r, nil
 }
