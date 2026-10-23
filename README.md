@@ -21,7 +21,7 @@ make migrate
 make run
 ```
 
-REST API は初期設定で `http://localhost:8080`、MCP サーバーは `http://localhost:8081` です。
+REST API は初期設定で `http://localhost:8080`、MCP エンドポイントは `http://localhost:8081/mcp` です。
 
 開発用の mock email コネクターが送った最新のメール OTP は、次のコマンドで確認できます。
 

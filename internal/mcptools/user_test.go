@@ -40,9 +40,8 @@ func (f *fakeUsers) Delete(_ context.Context, authID string) error {
 }
 
 func TestUserTools(t *testing.T) {
-	read := &mcp.CallToolRequest{Extra: &mcp.RequestExtra{TokenInfo: &auth.TokenInfo{UserID: "logto-sub", Scopes: []string{ReadScope}}}}
-	write := &mcp.CallToolRequest{Extra: &mcp.RequestExtra{TokenInfo: &auth.TokenInfo{UserID: "logto-sub", Scopes: []string{WriteScope}}}}
-	missingSubject := &mcp.CallToolRequest{Extra: &mcp.RequestExtra{TokenInfo: &auth.TokenInfo{Scopes: []string{ReadScope}}}}
+	authenticated := &mcp.CallToolRequest{Extra: &mcp.RequestExtra{TokenInfo: &auth.TokenInfo{UserID: "logto-sub"}}}
+	missingSubject := &mcp.CallToolRequest{Extra: &mcp.RequestExtra{TokenInfo: &auth.TokenInfo{}}}
 	tests := []struct {
 		name       string
 		operation  string
@@ -53,23 +52,19 @@ func TestUserTools(t *testing.T) {
 		wantOutput UserOutput
 		wantErr    bool
 	}{
-		{name: "get", operation: "get", request: read, wantMethod: "get", wantOutput: UserOutput{ID: "user-id", Name: "Alice"}},
-		{name: "get not found", operation: "get", request: read, serviceErr: usecase.ErrUserNotFound, wantMethod: "get", wantErr: true},
-		{name: "get internal error", operation: "get", request: read, serviceErr: errors.New("database failure"), wantMethod: "get", wantErr: true},
-		{name: "get needs read scope", operation: "get", request: write, wantErr: true},
+		{name: "get", operation: "get", request: authenticated, wantMethod: "get", wantOutput: UserOutput{ID: "user-id", Name: "Alice"}},
+		{name: "get not found", operation: "get", request: authenticated, serviceErr: usecase.ErrUserNotFound, wantMethod: "get", wantErr: true},
+		{name: "get internal error", operation: "get", request: authenticated, serviceErr: errors.New("database failure"), wantMethod: "get", wantErr: true},
 		{name: "get needs identity", operation: "get", request: missingSubject, wantErr: true},
 		{name: "get needs token info", operation: "get", request: &mcp.CallToolRequest{}, wantErr: true},
-		{name: "create", operation: "create", request: write, input: "Bob", wantMethod: "create", wantOutput: UserOutput{ID: "user-id", Name: "Bob"}},
-		{name: "create duplicate", operation: "create", request: write, input: "Bob", serviceErr: usecase.ErrUserExists, wantMethod: "create", wantErr: true},
-		{name: "create invalid name", operation: "create", request: write, serviceErr: usecase.ErrInvalidName, wantMethod: "create", wantErr: true},
-		{name: "create needs write scope", operation: "create", request: read, input: "Bob", wantErr: true},
-		{name: "update", operation: "update", request: write, input: "Carol", wantMethod: "update", wantOutput: UserOutput{ID: "user-id", Name: "Carol"}},
-		{name: "update not found", operation: "update", request: write, input: "Carol", serviceErr: usecase.ErrUserNotFound, wantMethod: "update", wantErr: true},
-		{name: "update invalid name", operation: "update", request: write, serviceErr: usecase.ErrInvalidName, wantMethod: "update", wantErr: true},
-		{name: "update needs write scope", operation: "update", request: read, input: "Carol", wantErr: true},
-		{name: "delete", operation: "delete", request: write, wantMethod: "delete"},
-		{name: "delete not found", operation: "delete", request: write, serviceErr: usecase.ErrUserNotFound, wantMethod: "delete", wantErr: true},
-		{name: "delete needs write scope", operation: "delete", request: read, wantErr: true},
+		{name: "create", operation: "create", request: authenticated, input: "Bob", wantMethod: "create", wantOutput: UserOutput{ID: "user-id", Name: "Bob"}},
+		{name: "create duplicate", operation: "create", request: authenticated, input: "Bob", serviceErr: usecase.ErrUserExists, wantMethod: "create", wantErr: true},
+		{name: "create invalid name", operation: "create", request: authenticated, serviceErr: usecase.ErrInvalidName, wantMethod: "create", wantErr: true},
+		{name: "update", operation: "update", request: authenticated, input: "Carol", wantMethod: "update", wantOutput: UserOutput{ID: "user-id", Name: "Carol"}},
+		{name: "update not found", operation: "update", request: authenticated, input: "Carol", serviceErr: usecase.ErrUserNotFound, wantMethod: "update", wantErr: true},
+		{name: "update invalid name", operation: "update", request: authenticated, serviceErr: usecase.ErrInvalidName, wantMethod: "update", wantErr: true},
+		{name: "delete", operation: "delete", request: authenticated, wantMethod: "delete"},
+		{name: "delete not found", operation: "delete", request: authenticated, serviceErr: usecase.ErrUserNotFound, wantMethod: "delete", wantErr: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
