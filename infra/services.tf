@@ -128,7 +128,11 @@ resource "google_cloud_run_v2_service" "application" {
     containers {
       name  = "cloud-sql-proxy"
       image = var.sql_proxy_image
-      args  = local.proxy_arguments
+      # アプリの HTTP 終了待ち（8秒）の間は接続を維持し、Cloud Run の10秒以内に終了する。
+      args = concat(local.proxy_arguments, [
+        "--min-sigterm-delay=8s",
+        "--max-sigterm-delay=1s",
+      ])
 
       startup_probe {
         period_seconds    = 5

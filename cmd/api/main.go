@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -22,11 +23,12 @@ import (
 )
 
 const (
-	listenAddress     = ":8080"
+	defaultPort       = "8080"
 	readHeaderTimeout = 15 * time.Second
 	readTimeout       = 2 * time.Minute
-	idleTimeout       = 2 * time.Minute
-	shutdownTimeout   = 3 * time.Minute
+	databaseTimeout   = 30 * time.Second
+	shutdownTimeout   = 8 * time.Second
+	cacheCloseTimeout = time.Second
 )
 
 func main() {
@@ -37,6 +39,12 @@ func main() {
 }
 
 func run() error {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = defaultPort
+	}
+	listenAddress := ":" + port
+
 	configuration, err := config.LoadAPI()
 	if err != nil {
 		return err
@@ -53,7 +61,9 @@ func run() error {
 		return fmt.Errorf("initialize token verifier: %w", err)
 	}
 	defer func() {
-		if err := verifier.Close(context.Background()); err != nil {
+		closeCtx, cancel := context.WithTimeout(context.Background(), cacheCloseTimeout)
+		defer cancel()
+		if err := verifier.Close(closeCtx); err != nil {
 			slog.Error("failed to stop JWKS cache", "error", err)
 		}
 	}()
@@ -63,7 +73,10 @@ func run() error {
 		return fmt.Errorf("initialize database pool: %w", err)
 	}
 	defer pool.Close()
-	if err := pool.Ping(ctx); err != nil {
+	databaseCtx, cancel := context.WithTimeout(ctx, databaseTimeout)
+	err = pool.Ping(databaseCtx)
+	cancel()
+	if err != nil {
 		return fmt.Errorf("connect to database: %w", err)
 	}
 
@@ -72,12 +85,14 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("initialize API handler: %w", err)
 	}
+	requestCtx, cancelRequests := context.WithCancel(context.Background())
+	defer cancelRequests()
 	server := &http.Server{
 		Addr:              listenAddress,
 		Handler:           handler,
 		ReadHeaderTimeout: readHeaderTimeout,
 		ReadTimeout:       readTimeout,
-		IdleTimeout:       idleTimeout,
+		BaseContext:       func(net.Listener) context.Context { return requestCtx },
 	}
 	serveErrors := make(chan error, 1)
 	go func() {
@@ -90,7 +105,8 @@ func run() error {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 		if err := server.Shutdown(shutdownCtx); err != nil {
-			return fmt.Errorf("shut down API server: %w", err)
+			cancelRequests()
+			return fmt.Errorf("shut down API server: %w", errors.Join(err, server.Close()))
 		}
 	case err := <-serveErrors:
 		if !errors.Is(err, http.ErrServerClosed) {
