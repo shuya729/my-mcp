@@ -1,0 +1,28 @@
+# TODO: 実際の値を設定した terraform.tfvars をローカルに作成する。秘密値は書かない。
+project_id = ""
+
+# TODO: 既存ネットワークと重複しない RFC 1918 /24 を指定する。
+subnet_cidr = ""
+
+# TODO: backend.hcl と同じバケット名を指定する。
+state_bucket = ""
+
+# TODO: 実際の GitHub リポジトリ、数値 ID、デフォルトブランチを指定する。
+github_repository     = ""
+github_repository_id  = ""
+github_owner_id       = ""
+github_default_branch = ""
+
+# TODO: 初回の Actions ビルドで得た digest を指定する。
+# Logto は既存の compose.yaml と同じ公式 1.43.0 に固定済み。
+initial_images = {
+  api       = ""
+  mcp       = ""
+  migration = ""
+  logto     = "docker.io/svhd/logto@sha256:41196a1fadbff35eae337965321c57946936755066bd92625ccf8a5b65d4b1be"
+}
+
+# Logto と Auth Proxy の既定イメージは variables.tf を参照。
+
+# TODO: 管理画面を利用する Google アカウントを個別に列挙する。
+iap_admin_emails = []

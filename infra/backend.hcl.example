@@ -1,0 +1,3 @@
+# TODO: 初回に手動で作成した、非公開の Terraform state 用 GCS バケット名を指定する。
+bucket = ""
+prefix = "my-mcp/production"
