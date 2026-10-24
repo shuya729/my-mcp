@@ -1,6 +1,6 @@
 locals {
   accounts           = toset(["app-runtime", "auth-runtime", "deployer", "terraform-plan"])
-  default_branch_ref = "refs/heads/${var.github_default_branch}"
+  default_branch_ref = "refs/heads/main"
   workflow_prefix    = "${var.github_repository}/.github/workflows"
 
   # 実行イベント・ブランチ・ワークフローファイルを識別し、plan と deploy を分離する。

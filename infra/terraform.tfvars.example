@@ -7,22 +7,21 @@ subnet_cidr = ""
 # TODO: backend.hcl と同じバケット名を指定する。
 state_bucket = ""
 
-# TODO: 実際の GitHub リポジトリ、数値 ID、デフォルトブランチを指定する。
-github_repository     = ""
-github_repository_id  = ""
-github_owner_id       = ""
-github_default_branch = ""
+# TODO: 実際の GitHub リポジトリ、数値 ID を指定する。
+github_repository    = ""
+github_repository_id = ""
+github_owner_id      = ""
 
-# TODO: 初回の Actions ビルドで得た digest を指定する。
-# Logto は既存の compose.yaml と同じ公式 1.43.0 に固定済み。
+# TODO: 初回に手元でビルド・登録したイメージの digest を指定する。
+# Logto は release.yaml の LOGTO_VERSION に対応する公式イメージの digest を指定する。
 initial_images = {
   api       = ""
   mcp       = ""
   migration = ""
-  logto     = "docker.io/svhd/logto@sha256:41196a1fadbff35eae337965321c57946936755066bd92625ccf8a5b65d4b1be"
+  logto     = ""
 }
 
-# Logto と Auth Proxy の既定イメージは variables.tf を参照。
+# Auth Proxy の既定イメージは variables.tf を参照。
 
 # TODO: 管理画面を利用する Google アカウントを個別に列挙する。
 iap_admin_emails = []

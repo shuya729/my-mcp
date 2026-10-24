@@ -53,17 +53,6 @@ variable "github_owner_id" {
   }
 }
 
-variable "github_default_branch" {
-  description = "手動で本番反映を許可するデフォルトブランチ。"
-  type        = string
-  nullable    = false
-
-  validation {
-    condition     = can(regex("^[A-Za-z0-9_./-]+$", var.github_default_branch))
-    error_message = "github_default_branch に実際のデフォルトブランチを指定してください。"
-  }
-}
-
 variable "database_password_revision" {
   description = "パスワード更新時だけ増やす番号。通常の apply では変更しない。"
   type = object({
@@ -91,13 +80,6 @@ variable "initial_images" {
     migration = string
     logto     = string
   })
-  default = {
-    api       = ""
-    mcp       = ""
-    migration = ""
-    # 既存の compose.yaml と同じ Logto 1.43.0。
-    logto = "docker.io/svhd/logto@sha256:41196a1fadbff35eae337965321c57946936755066bd92625ccf8a5b65d4b1be"
-  }
 }
 
 variable "sql_proxy_image" {
