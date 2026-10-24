@@ -26,7 +26,7 @@ output "workload_identity_provider" {
 output "actions_service_accounts" {
   description = "GitHub Actions が使用するサービスアカウント。"
   value = {
-    for name in ["deployer", "terraform-plan"] : name => google_service_account.application[name].email
+    for name in ["terraform-plan", "terraform-apply", "release"] : name => google_service_account.application[name].email
   }
 }
 

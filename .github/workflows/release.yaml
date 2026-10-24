@@ -12,8 +12,8 @@ concurrency:
 
 env:
   CLOUDSDK_RUN_REGION: asia-northeast1
-  CLOUDSDK_CORE_DISABLE_PROMPTS: 'true'
-  LOGTO_VERSION: '1.43.0'
+  CLOUDSDK_CORE_DISABLE_PROMPTS: "true"
+  LOGTO_VERSION: "1.43.0"
   GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
   REGISTRY: asia-northeast1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/my-mcp
   WIF_PROVIDER: ${{ vars.WIF_PROVIDER }}
@@ -29,8 +29,7 @@ jobs:
       - uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ env.WIF_PROVIDER }}
-          service_account: deployer@${{ env.GCP_PROJECT_ID }}.iam.gserviceaccount.com
-          project_id: ${{ env.GCP_PROJECT_ID }}
+          service_account: release@${{ env.GCP_PROJECT_ID }}.iam.gserviceaccount.com
       - uses: google-github-actions/setup-gcloud@v3
       - name: Check deployment resources
         run: |
@@ -96,13 +95,13 @@ jobs:
       - name: Migrate application database
         run: |
           gcloud run jobs update my-mcp-migrate \
+            --execute-now --wait \
             --container=application --image="$MIGRATION_IMAGE"
-          gcloud run jobs execute my-mcp-migrate --wait
       - name: Migrate Logto database
         run: |
           gcloud run jobs update my-mcp-logto-maintenance \
+            --execute-now --wait \
             --container=application --image="$LOGTO_IMAGE"
-          gcloud run jobs execute my-mcp-logto-maintenance --wait
       - name: Deploy services
         run: |
           gcloud run services update my-mcp-api \

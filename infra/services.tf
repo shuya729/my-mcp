@@ -84,9 +84,7 @@ resource "google_cloud_run_v2_service" "application" {
     execution_environment = "EXECUTION_ENVIRONMENT_GEN2"
 
     vpc_access {
-      egress = "PRIVATE_RANGES_ONLY"
       network_interfaces {
-        network    = google_compute_network.production.name
         subnetwork = google_compute_subnetwork.production.name
       }
     }
@@ -120,8 +118,8 @@ resource "google_cloud_run_v2_service" "application" {
         name = each.value.account == "app-runtime" ? "POSTGRES_PASSWORD" : "DB_URL"
         value_source {
           secret_key_ref {
-            secret  = each.value.account == "app-runtime" ? google_secret_manager_secret.database_password["app"].secret_id : google_secret_manager_secret.logto_database_url.secret_id
-            version = each.value.account == "app-runtime" ? google_secret_manager_secret_version.database_password["app"].version : google_secret_manager_secret_version.logto_database_url.version
+            secret  = each.value.account == "app-runtime" ? google_secret_manager_secret.database_password["app"].secret_id : google_secret_manager_secret.logto_database_url["logto"].secret_id
+            version = each.value.account == "app-runtime" ? google_secret_manager_secret_version.database_password["app"].version : google_secret_manager_secret_version.logto_database_url["logto"].version
           }
         }
       }
@@ -131,14 +129,6 @@ resource "google_cloud_run_v2_service" "application" {
       name  = "cloud-sql-proxy"
       image = var.sql_proxy_image
       args  = local.proxy_arguments
-
-      resources {
-        limits = {
-          cpu    = "1"
-          memory = "512Mi"
-        }
-        cpu_idle = true
-      }
 
       startup_probe {
         period_seconds    = 5
@@ -172,8 +162,7 @@ resource "google_cloud_run_v2_service" "application" {
     google_compute_forwarding_rule.database,
     google_sql_user.application,
     google_project_iam_member.database_client,
-    google_secret_manager_secret_iam_member.app_password,
-    google_secret_manager_secret_iam_member.logto_database_url,
+    google_secret_manager_secret_iam_member.runtime_database,
   ]
 }
 

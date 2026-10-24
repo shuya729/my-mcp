@@ -56,12 +56,16 @@ variable "github_owner_id" {
 variable "database_password_revision" {
   description = "パスワード更新時だけ増やす番号。通常の apply では変更しない。"
   type = object({
-    app   = number
-    logto = number
+    app               = number
+    app_migration     = number
+    logto             = number
+    logto_maintenance = number
   })
   default = {
-    app   = 1
-    logto = 1
+    app               = 1
+    app_migration     = 1
+    logto             = 1
+    logto_maintenance = 1
   }
 
   validation {
@@ -106,7 +110,7 @@ variable "subnet_cidr" {
   nullable    = false
 
   validation {
-    condition = can(cidrhost(var.subnet_cidr, 0)) && can(regex("/24$", var.subnet_cidr)) && (
+    condition = can(regex("/24$", var.subnet_cidr)) && (
       can(regex("^10\\.", var.subnet_cidr)) ||
       can(regex("^172\\.(1[6-9]|2[0-9]|3[01])\\.", var.subnet_cidr)) ||
       can(regex("^192\\.168\\.", var.subnet_cidr))

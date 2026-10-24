@@ -46,8 +46,7 @@ jobs:
       - uses: google-github-actions/auth@v3
         with:
           workload_identity_provider: ${{ env.WIF_PROVIDER }}
-          service_account: deployer@${{ env.GCP_PROJECT_ID }}.iam.gserviceaccount.com
-          project_id: ${{ env.GCP_PROJECT_ID }}
+          service_account: terraform-apply@${{ env.GCP_PROJECT_ID }}.iam.gserviceaccount.com
       - name: Initialize backend
         run: terraform init -input=false -lockfile=readonly -backend-config="bucket=$TF_STATE_BUCKET" -backend-config='prefix=my-mcp/production'
       - name: Validate

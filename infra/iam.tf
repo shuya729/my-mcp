@@ -1,13 +1,22 @@
 locals {
-  accounts           = toset(["app-runtime", "auth-runtime", "deployer", "terraform-plan"])
+  runtime_accounts = {
+    app-runtime      = "app"
+    app-migration    = "app_migration"
+    auth-runtime     = "logto"
+    auth-maintenance = "logto_maintenance"
+  }
+  accounts = setunion(
+    keys(local.runtime_accounts),
+    ["terraform-plan", "terraform-apply", "release"],
+  )
   default_branch_ref = "refs/heads/main"
   workflow_prefix    = "${var.github_repository}/.github/workflows"
 
-  # 実行イベント・ブランチ・ワークフローファイルを識別し、plan と deploy を分離する。
+  # 各ワークフローは自身のサービスアカウントだけを利用できる。
   github_access = <<-CEL
     assertion.event_name == 'pull_request' && assertion.workflow_ref.startsWith('${local.workflow_prefix}/terraform-plan.yaml@refs/pull/') ? 'plan' :
-    assertion.event_name == 'workflow_dispatch' && assertion.ref == '${local.default_branch_ref}' &&
-    assertion.workflow_ref in ['${local.workflow_prefix}/infrastructure.yaml@${local.default_branch_ref}', '${local.workflow_prefix}/release.yaml@${local.default_branch_ref}'] ? 'deploy' : 'none'
+    assertion.event_name == 'workflow_dispatch' && assertion.ref == '${local.default_branch_ref}' && assertion.workflow_ref == '${local.workflow_prefix}/infrastructure.yaml@${local.default_branch_ref}' ? 'infrastructure' :
+    assertion.event_name == 'workflow_dispatch' && assertion.ref == '${local.default_branch_ref}' && assertion.workflow_ref == '${local.workflow_prefix}/release.yaml@${local.default_branch_ref}' ? 'release' : 'none'
   CEL
 }
 
@@ -21,26 +30,28 @@ resource "google_service_account" "application" {
 }
 
 resource "google_project_iam_member" "database_client" {
-  for_each = toset(["app-runtime", "auth-runtime"])
+  for_each = local.runtime_accounts
 
   project = var.project_id
   role    = "roles/cloudsql.client"
-  member  = google_service_account.application[each.value].member
+  member  = google_service_account.application[each.key].member
+
+  condition {
+    title      = "production_database"
+    expression = "resource.name == 'projects/${var.project_id}/instances/${google_sql_database_instance.production.name}' && resource.type == 'sqladmin.googleapis.com/Instance'"
+  }
 }
 
-resource "google_secret_manager_secret_iam_member" "app_password" {
-  secret_id = google_secret_manager_secret.database_password["app"].id
+# 各サービス・Job は自身の資格情報だけを読み取る。
+resource "google_secret_manager_secret_iam_member" "runtime_database" {
+  for_each = local.runtime_accounts
+
+  secret_id = local.database_users[each.value].database == "logto" ? google_secret_manager_secret.logto_database_url[each.value].id : google_secret_manager_secret.database_password[each.value].id
   role      = "roles/secretmanager.secretAccessor"
-  member    = google_service_account.application["app-runtime"].member
+  member    = google_service_account.application[each.key].member
 }
 
-resource "google_secret_manager_secret_iam_member" "logto_database_url" {
-  secret_id = google_secret_manager_secret.logto_database_url.id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = google_service_account.application["auth-runtime"].member
-}
-
-# plan 用の参照権限。別途、DB パスワード2件の参照と state・ロックの更新権限を付与する。
+# 構成・IAM の参照と API 利用。Secret・state の権限は対象別に付与する。
 resource "google_project_iam_member" "plan" {
   for_each = toset(["roles/viewer", "roles/iam.securityReviewer", "roles/serviceusage.serviceUsageConsumer"])
 
@@ -49,17 +60,17 @@ resource "google_project_iam_member" "plan" {
   member  = google_service_account.application["terraform-plan"].member
 }
 
+# ephemeral の取得に必要。加工済みの DB URL 自体は読み取らない。
 resource "google_secret_manager_secret_iam_member" "plan_password" {
-  for_each = local.databases
+  for_each = local.database_users
 
-  secret_id = google_secret_manager_secret.database_password[each.value].id
+  secret_id = google_secret_manager_secret.database_password[each.key].id
   role      = "roles/secretmanager.secretAccessor"
   member    = google_service_account.application["terraform-plan"].member
 }
 
-# 単一の deployer がインフラを管理するため、各プロダクトの管理権限を持つ。
-# Owner / Editor は使わないが、IAM を変更できる強い権限である。
-resource "google_project_iam_member" "deployer" {
+# インフラと IAM の変更は Infrastructure ワークフローだけが行う。
+resource "google_project_iam_member" "infrastructure" {
   for_each = toset([
     "roles/artifactregistry.admin",
     "roles/cloudsql.admin",
@@ -76,24 +87,68 @@ resource "google_project_iam_member" "deployer" {
 
   project = var.project_id
   role    = each.value
-  member  = google_service_account.application["deployer"].member
+  member  = google_service_account.application["terraform-apply"].member
 }
 
-resource "google_service_account_iam_member" "deployer_runtime" {
-  for_each = toset(["app-runtime", "auth-runtime"])
+resource "google_service_account_iam_member" "runtime_user" {
+  for_each = {
+    for pair in setproduct(toset(["terraform-apply", "release"]), toset(keys(local.runtime_accounts))) :
+    "${pair[0]}/${pair[1]}" => { caller = pair[0], runtime = pair[1] }
+  }
 
-  service_account_id = google_service_account.application[each.value].name
+  service_account_id = google_service_account.application[each.value.runtime].name
   role               = "roles/iam.serviceAccountUser"
-  member             = google_service_account.application["deployer"].member
+  member             = google_service_account.application[each.value.caller].member
 }
 
-# GCS backend の state 参照・更新とロックに使用。事前作成したバケット自体は管理しない。
-resource "google_storage_bucket_iam_member" "state" {
-  for_each = toset(["terraform-plan", "deployer"])
+resource "google_artifact_registry_repository_iam_member" "release" {
+  location   = google_artifact_registry_repository.application.location
+  repository = google_artifact_registry_repository.application.name
+  role       = "roles/artifactregistry.writer"
+  member     = google_service_account.application["release"].member
+}
 
+resource "google_cloud_run_v2_service_iam_member" "release" {
+  for_each = local.services
+
+  name     = google_cloud_run_v2_service.application[each.key].name
+  location = local.region
+  role     = "roles/run.developer"
+  member   = google_service_account.application["release"].member
+}
+
+resource "google_cloud_run_v2_job_iam_member" "release" {
+  for_each = local.jobs
+
+  name     = google_cloud_run_v2_job.maintenance[each.key].name
+  location = local.region
+  role     = "roles/run.developer"
+  member   = google_service_account.application["release"].member
+}
+
+# state と、そのバケットの IAM を管理する。バケット自体は事前作成する。
+resource "google_storage_bucket_iam_member" "infrastructure_state" {
+  bucket = var.state_bucket
+  role   = "roles/storage.admin"
+  member = google_service_account.application["terraform-apply"].member
+}
+
+resource "google_storage_bucket_iam_member" "plan_state" {
+  bucket = var.state_bucket
+  role   = "roles/storage.objectViewer"
+  member = google_service_account.application["terraform-plan"].member
+}
+
+# state 本体への書き込みを許可せず、既定 workspace のロックだけを操作する。
+resource "google_storage_bucket_iam_member" "plan_lock" {
   bucket = var.state_bucket
   role   = "roles/storage.objectAdmin"
-  member = google_service_account.application[each.value].member
+  member = google_service_account.application["terraform-plan"].member
+
+  condition {
+    title      = "production_state_lock"
+    expression = "resource.name == 'projects/_/buckets/${var.state_bucket}/objects/my-mcp/production/default.tflock'"
+  }
 }
 
 resource "google_iam_workload_identity_pool" "github" {
@@ -112,7 +167,7 @@ resource "google_iam_workload_identity_pool_provider" "github" {
     "attribute.access" = local.github_access
   }
 
-  attribute_condition = "assertion.repository_id == '${var.github_repository_id}' && assertion.repository_owner_id == '${var.github_owner_id}' && attribute.access in ['plan', 'deploy']"
+  attribute_condition = "assertion.repository_id == '${var.github_repository_id}' && assertion.repository_owner_id == '${var.github_owner_id}' && attribute.access in ['plan', 'infrastructure', 'release']"
 
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"
@@ -121,8 +176,9 @@ resource "google_iam_workload_identity_pool_provider" "github" {
 
 resource "google_service_account_iam_member" "github" {
   for_each = {
-    terraform-plan = "plan"
-    deployer       = "deploy"
+    terraform-plan  = "plan"
+    terraform-apply = "infrastructure"
+    release         = "release"
   }
 
   service_account_id = google_service_account.application[each.key].name

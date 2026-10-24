@@ -1,5 +1,11 @@
 locals {
   databases = toset(["app", "logto"])
+  database_users = {
+    app               = { database = "app", role = "app_runtime" }
+    app_migration     = { database = "app", role = "app_owner" }
+    logto             = { database = "logto", role = "logto_runtime" }
+    logto_maintenance = { database = "logto", role = "logto_owner" }
+  }
 
   proxy_arguments = [
     "--psc",
@@ -17,9 +23,8 @@ resource "google_sql_database_instance" "production" {
   database_version = "POSTGRES_18"
 
   settings {
-    edition   = "ENTERPRISE"
-    tier      = "db-custom-1-3840"
-    disk_size = 10
+    edition = "ENTERPRISE"
+    tier    = "db-custom-1-3840"
 
     ip_configuration {
       ipv4_enabled = false
@@ -41,14 +46,14 @@ resource "google_sql_database" "application" {
   instance = google_sql_database_instance.production.name
 }
 
-# 初回に管理者が app_owner / logto_owner を手動作成する。
+# 初回に管理者が実行用・所有者用の DB ロールを手動作成する。
 # カスタムロールを指定し、既定の cloudsqlsuperuser を付与しない。
 resource "google_sql_user" "application" {
-  for_each = local.databases
+  for_each = local.database_users
 
-  name                = each.value
+  name                = each.key
   instance            = google_sql_database_instance.production.name
-  database_roles      = ["${each.value}_owner"]
-  password_wo         = ephemeral.google_secret_manager_secret_version.database_password[each.value].secret_data
-  password_wo_version = tonumber(google_secret_manager_secret_version.database_password[each.value].version)
+  database_roles      = [each.value.role]
+  password_wo         = ephemeral.google_secret_manager_secret_version.database_password[each.key].secret_data
+  password_wo_version = tonumber(google_secret_manager_secret_version.database_password[each.key].version)
 }

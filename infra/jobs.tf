@@ -3,12 +3,12 @@ locals {
     migration = {
       name    = "my-mcp-migrate"
       image   = var.initial_images.migration
-      account = "app-runtime"
+      account = "app-migration"
     }
     logto = {
       name    = "my-mcp-logto-maintenance"
       image   = var.initial_images.logto
-      account = "auth-runtime"
+      account = "auth-maintenance"
     }
   }
 }
@@ -25,9 +25,7 @@ resource "google_cloud_run_v2_job" "maintenance" {
       max_retries     = 0
 
       vpc_access {
-        egress = "PRIVATE_RANGES_ONLY"
         network_interfaces {
-          network    = google_compute_network.production.name
           subnetwork = google_compute_subnetwork.production.name
         }
       }
@@ -53,10 +51,11 @@ resource "google_cloud_run_v2_job" "maintenance" {
 
         dynamic "env" {
           for_each = each.key == "migration" ? {
-            PGHOST     = "127.0.0.1"
-            PGUSER     = "app"
-            PGDATABASE = "app"
-            PGSSLMODE  = "disable"
+            GOOSE_TABLE = "migration.goose_db_version"
+            PGHOST      = "127.0.0.1"
+            PGUSER      = "app_migration"
+            PGDATABASE  = "app"
+            PGSSLMODE   = "disable"
           } : { CI = "true" }
           content {
             name  = env.key
@@ -68,8 +67,8 @@ resource "google_cloud_run_v2_job" "maintenance" {
           name = each.key == "migration" ? "PGPASSWORD" : "DB_URL"
           value_source {
             secret_key_ref {
-              secret  = each.key == "migration" ? google_secret_manager_secret.database_password["app"].secret_id : google_secret_manager_secret.logto_database_url.secret_id
-              version = each.key == "migration" ? google_secret_manager_secret_version.database_password["app"].version : google_secret_manager_secret_version.logto_database_url.version
+              secret  = each.key == "migration" ? google_secret_manager_secret.database_password["app_migration"].secret_id : google_secret_manager_secret.logto_database_url["logto_maintenance"].secret_id
+              version = each.key == "migration" ? google_secret_manager_secret_version.database_password["app_migration"].version : google_secret_manager_secret_version.logto_database_url["logto_maintenance"].version
             }
           }
         }
@@ -79,13 +78,6 @@ resource "google_cloud_run_v2_job" "maintenance" {
         name  = "cloud-sql-proxy"
         image = var.sql_proxy_image
         args  = concat(local.proxy_arguments, ["--quitquitquit"])
-
-        resources {
-          limits = {
-            cpu    = "1"
-            memory = "512Mi"
-          }
-        }
 
         startup_probe {
           period_seconds    = 5
@@ -115,7 +107,6 @@ resource "google_cloud_run_v2_job" "maintenance" {
     google_compute_forwarding_rule.database,
     google_sql_user.application,
     google_project_iam_member.database_client,
-    google_secret_manager_secret_iam_member.app_password,
-    google_secret_manager_secret_iam_member.logto_database_url,
+    google_secret_manager_secret_iam_member.runtime_database,
   ]
 }
