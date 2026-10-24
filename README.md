@@ -29,6 +29,16 @@ REST API は初期設定で `http://localhost:8080`、MCP エンドポイント�
 docker compose exec logto cat /tmp/logto/mock_email_record.txt
 ```
 
+## GCP
+
+東京の Cloud Run と Cloud SQL PostgreSQL 18（PSC 接続）を使用します。Logto 管理画面は IAP で保護します。
+初回構築・設定・保守は [GCP 構築・運用](docs/gcp.md) を参照してください。
+
+- `Infrastructure`：インフラ構成を反映。
+- `Release`：イメージのビルド、DB 更新、サービス配置を実行。
+
+どちらも `main` から GitHub Actions で手動実行します。
+
 ## 開発用コマンド
 
 - `make up` — コンテナを起動
