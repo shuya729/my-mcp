@@ -1,0 +1,115 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: production
+
+env:
+  CLOUDSDK_RUN_REGION: asia-northeast1
+  CLOUDSDK_CORE_DISABLE_PROMPTS: 'true'
+  LOGTO_VERSION: '1.43.0'
+  GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+  REGISTRY: asia-northeast1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/my-mcp
+  WIF_PROVIDER: ${{ vars.WIF_PROVIDER }}
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: deployer@${{ env.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+          project_id: ${{ env.GCP_PROJECT_ID }}
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Check deployment resources
+        run: |
+          for job in my-mcp-migrate my-mcp-logto-maintenance; do
+            gcloud run jobs describe "$job" > /dev/null
+          done
+          for service in my-mcp-api my-mcp-mcp my-mcp-logto my-mcp-logto-admin; do
+            gcloud run services describe "$service" > /dev/null
+          done
+      - name: Configure Docker authentication
+        run: gcloud auth configure-docker asia-northeast1-docker.pkg.dev
+      - uses: docker/setup-buildx-action@v4
+      - name: Build API
+        id: api
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: api
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.REGISTRY }}/api:${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Build MCP
+        id: mcp
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: mcp
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.REGISTRY }}/mcp:${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Build migrations
+        id: migration
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: migration
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.REGISTRY }}/migration:${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Resolve Logto image digest
+        run: |
+          logto_digest=$(docker buildx imagetools inspect "docker.io/svhd/logto:$LOGTO_VERSION" --format '{{.Manifest.Digest}}')
+          echo "LOGTO_IMAGE=docker.io/svhd/logto@$logto_digest" >> "$GITHUB_ENV"
+      - name: Record deployment images
+        env:
+          API_IMAGE: ${{ env.REGISTRY }}/api@${{ steps.api.outputs.digest }}
+          MCP_IMAGE: ${{ env.REGISTRY }}/mcp@${{ steps.mcp.outputs.digest }}
+          MIGRATION_IMAGE: ${{ env.REGISTRY }}/migration@${{ steps.migration.outputs.digest }}
+        run: |
+          {
+            echo "API_IMAGE=$API_IMAGE"
+            echo "MCP_IMAGE=$MCP_IMAGE"
+            echo "MIGRATION_IMAGE=$MIGRATION_IMAGE"
+          } >> "$GITHUB_ENV"
+          {
+            echo '配置対象：'
+            echo
+            echo "- API: $API_IMAGE"
+            echo "- MCP: $MCP_IMAGE"
+            echo "- Migration: $MIGRATION_IMAGE"
+            echo "- Logto: $LOGTO_IMAGE"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Migrate application database
+        run: |
+          gcloud run jobs update my-mcp-migrate \
+            --container=application --image="$MIGRATION_IMAGE"
+          gcloud run jobs execute my-mcp-migrate --wait
+      - name: Migrate Logto database
+        run: |
+          gcloud run jobs update my-mcp-logto-maintenance \
+            --container=application --image="$LOGTO_IMAGE"
+          gcloud run jobs execute my-mcp-logto-maintenance --wait
+      - name: Deploy services
+        run: |
+          gcloud run services update my-mcp-api \
+            --container=application --image="$API_IMAGE"
+          gcloud run services update my-mcp-mcp \
+            --container=application --image="$MCP_IMAGE"
+          gcloud run services update my-mcp-logto \
+            --container=application --image="$LOGTO_IMAGE"
+          gcloud run services update my-mcp-logto-admin \
+            --container=application --image="$LOGTO_IMAGE"
