@@ -103,7 +103,7 @@ terraform -chdir=infra apply
 
 ## 通常運用
 
-- PR：Go の CI と、インフラ・関連ワークフロー変更時の Terraform plan（対象は [terraform-plan.yaml](../.github/workflows/terraform-plan.yaml)）。
+- PR：Go の CI。
 - `Infrastructure`：手動で Terraform plan・apply。初期化 Job は実行しません。
 - `Release`：入力なしで手動実行し、アプリをビルド後、アプリ・Logto 両方の DB 更新と全サービスの配置を行います。Logto のバージョンは `.github/workflows/release.yaml` の `LOGTO_VERSION` で指定します。
 

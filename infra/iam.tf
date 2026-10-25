@@ -7,14 +7,13 @@ locals {
   }
   accounts = setunion(
     keys(local.runtime_accounts),
-    ["terraform-plan", "terraform-apply", "release"],
+    ["terraform-apply", "release"],
   )
   default_branch_ref = "refs/heads/main"
   workflow_prefix    = "${var.github_repository}/.github/workflows"
 
   # 各ワークフローは自身のサービスアカウントだけを利用できる。
   github_access = <<-CEL
-    assertion.event_name == 'pull_request' && assertion.workflow_ref.startsWith('${local.workflow_prefix}/terraform-plan.yaml@refs/pull/') ? 'plan' :
     assertion.event_name == 'workflow_dispatch' && assertion.ref == '${local.default_branch_ref}' && assertion.workflow_ref == '${local.workflow_prefix}/infrastructure.yaml@${local.default_branch_ref}' ? 'infrastructure' :
     assertion.event_name == 'workflow_dispatch' && assertion.ref == '${local.default_branch_ref}' && assertion.workflow_ref == '${local.workflow_prefix}/release.yaml@${local.default_branch_ref}' ? 'release' : 'none'
   CEL
@@ -49,24 +48,6 @@ resource "google_secret_manager_secret_iam_member" "runtime_database" {
   secret_id = local.database_users[each.value].database == "logto" ? google_secret_manager_secret.logto_database_url[each.value].id : google_secret_manager_secret.database_password[each.value].id
   role      = "roles/secretmanager.secretAccessor"
   member    = google_service_account.application[each.key].member
-}
-
-# 構成・IAM の参照と API 利用。Secret・state の権限は対象別に付与する。
-resource "google_project_iam_member" "plan" {
-  for_each = toset(["roles/viewer", "roles/iam.securityReviewer", "roles/serviceusage.serviceUsageConsumer"])
-
-  project = var.project_id
-  role    = each.value
-  member  = google_service_account.application["terraform-plan"].member
-}
-
-# ephemeral の取得に必要。加工済みの DB URL 自体は読み取らない。
-resource "google_secret_manager_secret_iam_member" "plan_password" {
-  for_each = local.database_users
-
-  secret_id = google_secret_manager_secret.database_password[each.key].id
-  role      = "roles/secretmanager.secretAccessor"
-  member    = google_service_account.application["terraform-plan"].member
 }
 
 # インフラと IAM の変更は Infrastructure ワークフローだけが行う。
@@ -133,24 +114,6 @@ resource "google_storage_bucket_iam_member" "infrastructure_state" {
   member = google_service_account.application["terraform-apply"].member
 }
 
-resource "google_storage_bucket_iam_member" "plan_state" {
-  bucket = var.state_bucket
-  role   = "roles/storage.objectViewer"
-  member = google_service_account.application["terraform-plan"].member
-}
-
-# state 本体への書き込みを許可せず、既定 workspace のロックだけを操作する。
-resource "google_storage_bucket_iam_member" "plan_lock" {
-  bucket = var.state_bucket
-  role   = "roles/storage.objectAdmin"
-  member = google_service_account.application["terraform-plan"].member
-
-  condition {
-    title      = "production_state_lock"
-    expression = "resource.name == 'projects/_/buckets/${var.state_bucket}/objects/my-mcp/production/default.tflock'"
-  }
-}
-
 resource "google_iam_workload_identity_pool" "github" {
   workload_identity_pool_id = "github-actions"
   display_name              = "GitHub Actions"
@@ -167,7 +130,7 @@ resource "google_iam_workload_identity_pool_provider" "github" {
     "attribute.access" = local.github_access
   }
 
-  attribute_condition = "assertion.repository_id == '${var.github_repository_id}' && assertion.repository_owner_id == '${var.github_owner_id}' && attribute.access in ['plan', 'infrastructure', 'release']"
+  attribute_condition = "assertion.repository_id == '${var.github_repository_id}' && assertion.repository_owner_id == '${var.github_owner_id}' && attribute.access in ['infrastructure', 'release']"
 
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com"
@@ -176,7 +139,6 @@ resource "google_iam_workload_identity_pool_provider" "github" {
 
 resource "google_service_account_iam_member" "github" {
   for_each = {
-    terraform-plan  = "plan"
     terraform-apply = "infrastructure"
     release         = "release"
   }
