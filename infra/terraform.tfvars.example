@@ -1,0 +1,27 @@
+# TODO: 実際の値を設定した terraform.tfvars をローカルに作成する。秘密値は書かない。
+project_id = ""
+
+# TODO: 既存ネットワークと重複しない RFC 1918 /24 を指定する。
+subnet_cidr = ""
+
+# TODO: backend.hcl と同じバケット名を指定する。
+state_bucket = ""
+
+# TODO: 実際の GitHub リポジトリ、数値 ID を指定する。
+github_repository    = ""
+github_repository_id = ""
+github_owner_id      = ""
+
+# TODO: 初回に手元でビルド・登録したイメージの digest を指定する。
+# Logto は release.yaml の LOGTO_VERSION に対応する公式イメージの digest を指定する。
+initial_images = {
+  api       = ""
+  mcp       = ""
+  migration = ""
+  logto     = ""
+}
+
+# Auth Proxy の既定イメージは variables.tf を参照。
+
+# TODO: 管理画面を利用する Google アカウントを個別に列挙する。
+iap_admin_emails = []

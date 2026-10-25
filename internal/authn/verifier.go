@@ -15,7 +15,11 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/auth"
 )
 
-const clockSkew = 30 * time.Second
+const (
+	clockSkew             = 30 * time.Second
+	initializationTimeout = 90 * time.Second
+	shutdownTimeout       = time.Second
+)
 
 type Verifier struct {
 	issuer   string
@@ -24,9 +28,12 @@ type Verifier struct {
 	cache    *jwkfetch.Cache
 }
 
-// 認可サーバーの検出と JWKS の読み込み
+// 認可サーバーを検出し、JWKS を読み込む。使用後は Close でキャッシュを停止する。
 func NewVerifier(ctx context.Context, issuer, audience string) (*Verifier, error) {
-	metadata, err := auth.GetAuthServerMetadata(ctx, issuer, nil)
+	initCtx, cancel := context.WithTimeout(ctx, initializationTimeout)
+	defer cancel()
+
+	metadata, err := auth.GetAuthServerMetadata(initCtx, issuer, nil)
 	if err != nil {
 		return nil, fmt.Errorf("discover authorization server: %w", err)
 	}
@@ -46,15 +53,18 @@ func NewVerifier(ctx context.Context, issuer, audience string) (*Verifier, error
 	}
 
 	cache, err := jwkfetch.NewCache(
-		ctx,
+		// 起動の期限切れや SIGTERM で、処理中リクエストの鍵取得を停止しない。
+		context.WithoutCancel(ctx),
 		httprc.NewClient(),
 		jwkfetch.WithHTTPClient(jwksHTTPClient),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("create JWKS cache: %w", err)
 	}
-	if err := cache.Register(ctx, metadata.JWKSURI); err != nil {
-		_ = cache.Shutdown(context.Background())
+	if err := cache.Register(initCtx, metadata.JWKSURI); err != nil {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer shutdownCancel()
+		_ = cache.Shutdown(shutdownCtx)
 		return nil, fmt.Errorf("register JWKS: %w", err)
 	}
 

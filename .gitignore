@@ -1,2 +1,16 @@
 .env
 bin/
+
+# Terraform の実情報・作業ファイル。provider lock file はコミット対象。
+infra/.terraform/
+infra/*.tfvars
+infra/*.tfvars.json
+infra/backend.hcl
+infra/*.tfstate
+infra/*.tfstate.*
+infra/*.tfplan
+infra/crash.log
+infra/crash.*.log
+
+# GitHub Actions の Google Cloud 認証ファイル。
+gha-creds-*.json

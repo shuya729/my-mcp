@@ -162,10 +162,14 @@ func TestVerifierVerify(t *testing.T) {
 	t.Cleanup(server.Close)
 
 	const audience = "test-audience"
-	verifier, err := NewVerifier(context.Background(), server.URL, audience)
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	verifier, err := NewVerifier(ctx, server.URL, audience)
 	if err != nil {
 		t.Fatalf("NewVerifier() error = %v", err)
 	}
+	// 起動 context の終了後も、Close までは処理中リクエストの認証を続ける。
+	cancel()
 	t.Cleanup(func() {
 		if err := verifier.Close(context.Background()); err != nil {
 			t.Errorf("Close() error = %v", err)
