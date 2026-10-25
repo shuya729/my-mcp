@@ -175,7 +175,6 @@ resource "google_cloud_run_v2_service_iam_member" "iap_invoker" {
   name     = google_cloud_run_v2_service.application["logto-admin"].name
   location = local.region
   role     = "roles/run.invoker"
-  # Google 管理のサービスエージェントは初回準備で生成する。
   member = "serviceAccount:service-${data.google_project.production.number}@gcp-sa-iap.iam.gserviceaccount.com"
 }
 

@@ -88,11 +88,10 @@ gcloud run jobs execute my-mcp-logto-maintenance --project="$GCP_PROJECT_ID" --r
 
 成功後、`logto` で [logto-after-seed.sql](../infra/sql/logto-after-seed.sql) を実行します。通常サービスには所有者権限を渡さず、テナント情報と起動用設定の参照だけを許可します。Logto 更新時は、この権限設定と RLS が新バージョンに対応することを確認してください。
 
-7. アプリ DB を更新し、Google 管理の IAP サービスエージェントを生成してからサービスを作成します。
+7. アプリ DB を更新し、サービスを作成します。
 
 ```sh
 gcloud run jobs execute my-mcp-migrate --project="$GCP_PROJECT_ID" --region=asia-northeast1 --wait
-gcloud beta services identity create --service=iap.googleapis.com --project="$GCP_PROJECT_ID"
 terraform -chdir=infra apply
 ```
 
