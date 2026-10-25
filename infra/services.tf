@@ -54,6 +54,7 @@ locals {
     }
     logto = {
       ENDPOINT                = local.service_urls.logto
+      ADMIN_ENDPOINT          = local.service_urls["logto-admin"]
       ADMIN_DISABLE_LOCALHOST = "1"
       TRUST_PROXY_HEADER      = "1"
     }
