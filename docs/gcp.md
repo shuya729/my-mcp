@@ -34,9 +34,7 @@ terraform -chdir=infra apply \
   -target=google_project_iam_member.infrastructure \
   -target=google_service_account_iam_member.runtime_user \
   -target=google_artifact_registry_repository_iam_member.release \
-  -target=google_storage_bucket_iam_member.infrastructure_state \
-  -target=google_storage_bucket_iam_member.plan_state \
-  -target=google_storage_bucket_iam_member.plan_lock
+  -target=google_storage_bucket_iam_member.infrastructure_state
 ```
 
 4. Cloud SQL コンソールで `my-mcp-production` の `postgres` のパスワードを設定します。[Cloud SQL Studio](https://docs.cloud.google.com/sql/docs/postgres/manage-data-using-studio) に `postgres` ユーザー・`postgres` DB で接続し、[roles.sql](../infra/sql/roles.sql) を実行します。実行者には `roles/cloudsql.studioUser` 相当の権限も必要です。
@@ -77,8 +75,7 @@ Auth Proxy の既定イメージは `infra/variables.tf` を参照してくだ�
 
 ```sh
 terraform -chdir=infra apply \
-  -target=google_cloud_run_v2_job.maintenance \
-  -target=google_secret_manager_secret_iam_member.plan_password
+  -target=google_cloud_run_v2_job.maintenance
 ```
 
 Studio に `postgres` ユーザーで接続し、`app` DB では [app-access.sql](../infra/sql/app-access.sql)、`logto` DB では [logto-before-seed.sql](../infra/sql/logto-before-seed.sql) を実行します。その後 Logto を初期化します。
@@ -103,7 +100,7 @@ terraform -chdir=infra apply
 
 ## 通常運用
 
-- PR：Go の CI と、インフラ・関連ワークフロー変更時の Terraform plan（対象は [terraform-plan.yaml](../.github/workflows/terraform-plan.yaml)）。
+- PR：Go の CI。
 - `Infrastructure`：手動で Terraform plan・apply。初期化 Job は実行しません。
 - `Release`：入力なしで手動実行し、アプリをビルド後、アプリ・Logto 両方の DB 更新と全サービスの配置を行います。Logto のバージョンは `.github/workflows/release.yaml` の `LOGTO_VERSION` で指定します。
 
