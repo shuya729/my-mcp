@@ -34,9 +34,7 @@ terraform -chdir=infra apply \
   -target=google_project_iam_member.infrastructure \
   -target=google_service_account_iam_member.runtime_user \
   -target=google_artifact_registry_repository_iam_member.release \
-  -target=google_storage_bucket_iam_member.infrastructure_state \
-  -target=google_storage_bucket_iam_member.plan_state \
-  -target=google_storage_bucket_iam_member.plan_lock
+  -target=google_storage_bucket_iam_member.infrastructure_state
 ```
 
 4. Cloud SQL コンソールで `my-mcp-production` の `postgres` のパスワードを設定します。[Cloud SQL Studio](https://docs.cloud.google.com/sql/docs/postgres/manage-data-using-studio) に `postgres` ユーザー・`postgres` DB で接続し、[roles.sql](../infra/sql/roles.sql) を実行します。実行者には `roles/cloudsql.studioUser` 相当の権限も必要です。
@@ -77,8 +75,7 @@ Auth Proxy の既定イメージは `infra/variables.tf` を参照してくだ�
 
 ```sh
 terraform -chdir=infra apply \
-  -target=google_cloud_run_v2_job.maintenance \
-  -target=google_secret_manager_secret_iam_member.plan_password
+  -target=google_cloud_run_v2_job.maintenance
 ```
 
 Studio に `postgres` ユーザーで接続し、`app` DB では [app-access.sql](../infra/sql/app-access.sql)、`logto` DB では [logto-before-seed.sql](../infra/sql/logto-before-seed.sql) を実行します。その後 Logto を初期化します。
