@@ -3,6 +3,10 @@
 東京の Cloud Run（API・MCP・Logto 認証・Logto 管理）と、PSC 経由の Cloud SQL PostgreSQL 18 を使用します。公開 URL は `run.app`。Logto 管理画面は [IAP の Google 管理 OAuth クライアント](https://docs.cloud.google.com/run/docs/securing/identity-aware-proxy-cloud-run)を使うため、プロジェクトと同じ Google Cloud 組織のアカウントが必要です。
 Terraform は構成、GitHub Actions はイメージ更新を管理します。
 
+![Google Cloud 構成図：公開 Cloud Run・IAP 管理アクセス・DB 更新 Job と、VPC の PSC 経由の Cloud SQL 接続](images/gcp-architecture.svg)
+
+実行基盤の概略図です。アイコンは [Google Cloud 公式の console product icons](https://cloud.google.com/icons) を使用しています。
+
 ## 初回構築
 
 Terraform 1.12.2（Actions と同じバージョン）、gcloud、Docker Buildx が必要です。以下はリポジトリのルートで実行します。
